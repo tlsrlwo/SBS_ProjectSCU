@@ -1,0 +1,20 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace SCU
+{
+    public class TitleUI : UIBase 
+    {
+       public void OnClickStartButton()
+        {
+            Main.Instance.ChangeScene(SceneType.Game); 
+        }
+
+        public void OnclickExitButton()
+        {
+            Debug.Log("Clicked Exit Button");
+
+        }
+    }
+}
