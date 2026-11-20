@@ -250,7 +250,7 @@ namespace SCU
             {
                 if(hitInfo.transform.root != transform) // Raycast가 자기 자신(Player Root)에 부딪힌 것이 아닐 때만 타겟 위치 설정
                 {
-                aimingTargetPosition = hitInfo.point;
+                    aimingTargetPosition = hitInfo.point;
                 }
             }
             else // Raycast에 실패하면 카메라 전방 방향으로 1000m 떨어진 가상의 지점을 타겟으로 설정
@@ -287,12 +287,14 @@ namespace SCU
             cinemachineCameraTarget.transform.rotation = Quaternion.Euler(cinemachineTargetPitch + cameraAngleOverride, cinemachineTargetYaw, 0.0f);
         }
 
+#region 이동
         private void Move()
         {
+            // 움직임이 가능한지 체크 
             if (!isEnableMovement)
                 return;
 
-            // 이동 속도와 달리기 속도 설정을 바탕으로 목표 속도(Target Speed) 결정
+            // 이동 속도와 달리기 속도 설정을 바탕으로 목표 속도(Target Speed) 결정, isSprint 이면 sprintSpeed, !isSprint 이면 moveSpeed;
             float targetSpeed = isSprint ? sprintSpeed : moveSpeed;
 
             // 단순화된 가속 및 감속 로직 (수정이 용이하도록 설계됨)
@@ -301,19 +303,28 @@ namespace SCU
             // 이동 입력이 없다면 목표 속도를 0으로 설정
             if (move == Vector2.zero) targetSpeed = 0.0f;
 
-            // 플레이어의 현재 수평 방향 속도 참조
+            // 플레이어의 현재 수평 속도의 길이(magnitude)값
             float currentHorizontalSpeed = new Vector3(controller.velocity.x, 0.0f, controller.velocity.z).magnitude;
 
+            // 현재 속도와 목표 속도가 거의 비슷해졌을 때 불필요하게 보간을 반복하지 않도록 만든 허용 오차
             float speedOffset = 0.1f;
+
+            // 이동방향값을 inputMagnitude 변수에 저장
             float inputMagnitude = move.magnitude;
 
-            // 목표 속도로 가속 또는 감속 처리
+            // 목표 속도로 가속 또는 감속 처리 
             if (currentHorizontalSpeed < targetSpeed - speedOffset ||
                 currentHorizontalSpeed > targetSpeed + speedOffset)
             {
                 // 선형 보간 대신 곡선 형태의 결과를 만들어 더욱 자연스러운 속도 변화를 제공
                 // 참고: Lerp의 T 값은 내부적으로 클램프되므로 수동으로 속도를 클램프할 필요가 없음
-                speed = Mathf.Lerp(currentHorizontalSpeed, targetSpeed * inputMagnitude, Time.deltaTime * speedChangeRate);
+                speed = Mathf.Lerp(
+                    currentHorizontalSpeed,                     // 현재 수평 이동 속도
+                    targetSpeed * inputMagnitude,               // 목표 속도에 이동입력값을 곱하면 입력의 크기에 따라 실제 목표 속도가 달라짐
+                    Time.deltaTime * speedChangeRate            // 보간값(t)을 고정하면 컴퓨터의 성능(FPS)에 따라 보간 속도가 달라질 수 있다. 
+                                                                // 따라서 Time.deltaTime과 speedChangeRate를 곱하여 프레임 간 경과 시간에 비례하도록 
+                                                                // 보간 비율을 조정함으로써, 서로 다른 FPS 환경에서도 일관된 보간 동작을 구현한다
+                    );
                 // 속도 보간을 수행하는 코드
 
                 // 소수점 셋째 자리까지 반올림
@@ -324,7 +335,14 @@ namespace SCU
                 speed = targetSpeed;
             }
 
-            animationBlend = Mathf.Lerp(animationBlend, targetSpeed, Time.deltaTime * speedChangeRate);
+            // animationBlend = 실제 플레이어의 이동 속도와 애니메이션에 전달할 속도를 분리하기 위해 선언한 변수, 
+            // 실제 이동은 서서히 증가하는데 애니메이션은 빠르게 변화 혹은 실제 이동은 빠르게 가는데 애니메이션은 비교적 느리게 변화하는 것 처럼 분리가 가능해짐
+            animationBlend = Mathf.Lerp(
+                animationBlend,
+                targetSpeed,
+                Time.deltaTime * speedChangeRate);            
+
+            // animationBlend 가 0.01 보다 작아지면서 Animator의 Speed 파라미터에 아주 작은 값이 계속 전달되는 것을 방지
             if (animationBlend < 0.01f) animationBlend = 0f;
 
             // 입력 방향 정규화 (Normalize)
@@ -346,13 +364,13 @@ namespace SCU
                 }
             }
 
-
             Vector3 targetDirection = Quaternion.Euler(0.0f, targetRotation, 0.0f) * Vector3.forward;
 
             // CharacterController를 이용한 최종 플레이어 이동 처리
             controller.Move(targetDirection.normalized * (speed * Time.deltaTime) +
                              new Vector3(0.0f, verticalVelocity, 0.0f) * Time.deltaTime);
         }
+#endregion 
 
         private static float ClampAngle(float lfAngle, float lfMin, float lfMax)
         {
